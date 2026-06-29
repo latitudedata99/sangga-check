@@ -2,16 +2,25 @@
 
 import { useState } from 'react'
 import dynamic from 'next/dynamic'
-import { AnalyzeResult } from '@/types'
+import { AnalyzeResult, FloorType } from '@/types'
 import ViolinChart from '@/components/charts/ViolinChart'
 
 const KakaoMap = dynamic(() => import('@/components/map/KakaoMap'), { ssr: false })
+
+type DetailTab = 'listings' | 'history' | 'negotiation'
+
+const floorBadgeStyle: Record<FloorType, string> = {
+  '1층':  'bg-blue-100 text-blue-700',
+  '지상층': 'bg-green-100 text-green-700',
+  '지하층': 'bg-red-100 text-red-700',
+}
 
 export default function AnalyzePage() {
   const [address, setAddress] = useState('')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<AnalyzeResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [activeTab, setActiveTab] = useState<DetailTab>('listings')
 
   async function handleAnalyze() {
     if (!address.trim()) return
@@ -133,23 +142,126 @@ export default function AnalyzePage() {
               <ViolinChart distribution={result.distribution} />
             </div>
 
-            {/* 상세 리포트 잠금 */}
-            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm relative overflow-hidden">
-              <div className="absolute inset-0 bg-white/70 backdrop-blur-sm flex flex-col items-center justify-center z-10">
-                <span className="text-3xl mb-2">🔒</span>
-                <p className="font-semibold text-gray-700 mb-1">상세 리포트</p>
-                <p className="text-sm text-gray-500 mb-4 text-center">비교 매물 리스트, 실거래 사례,<br />협상 포인트가 포함됩니다.</p>
-                <button className="bg-blue-600 text-white px-6 py-2 rounded-lg text-sm font-medium opacity-50 cursor-not-allowed">
-                  상세 리포트 열람하기 (준비중)
-                </button>
+            {/* 상세 리포트 */}
+            <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+              {/* 탭 헤더 */}
+              <div className="flex border-b border-gray-200">
+                {(
+                  [
+                    { key: 'listings',    label: '매물 리스트' },
+                    { key: 'history',     label: '실거래 사례' },
+                    { key: 'negotiation', label: '협상 포인트' },
+                  ] as { key: DetailTab; label: string }[]
+                ).map(tab => (
+                  <button
+                    key={tab.key}
+                    onClick={() => setActiveTab(tab.key)}
+                    className={`flex-1 py-3 text-sm font-medium transition-colors ${
+                      activeTab === tab.key
+                        ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50'
+                        : 'text-gray-500 hover:text-gray-700'
+                    }`}
+                  >
+                    {tab.label}
+                  </button>
+                ))}
               </div>
-              <div className="space-y-2 opacity-30 select-none">
-                <div className="h-4 bg-gray-200 rounded w-3/4" />
-                <div className="h-4 bg-gray-200 rounded w-1/2" />
-                <div className="h-4 bg-gray-200 rounded w-2/3" />
-                <div className="h-4 bg-gray-200 rounded w-3/4" />
-                <div className="h-4 bg-gray-200 rounded w-1/2" />
-              </div>
+
+              {/* 매물 리스트 탭 */}
+              {activeTab === 'listings' && (
+                <div className="overflow-x-auto max-h-96 overflow-y-auto">
+                  {(!result.listings || result.listings.length === 0) ? (
+                    <p className="text-center text-gray-400 text-sm py-8">매물 데이터가 없습니다.</p>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 sticky top-0">
+                        <tr>
+                          <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium">주소</th>
+                          <th className="text-center px-3 py-2 text-xs text-gray-500 font-medium">층구분</th>
+                          <th className="text-right px-3 py-2 text-xs text-gray-500 font-medium">보증금</th>
+                          <th className="text-right px-3 py-2 text-xs text-gray-500 font-medium">월세</th>
+                          <th className="text-right px-3 py-2 text-xs text-gray-500 font-medium">전용평수</th>
+                          <th className="text-right px-4 py-2 text-xs text-gray-500 font-medium">평단가</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {result.listings.map(row => (
+                          <tr key={row.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-2 text-gray-700 max-w-[180px] truncate" title={row.주소}>
+                              {row.주소}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${floorBadgeStyle[row.층_구분] ?? 'bg-gray-100 text-gray-600'}`}>
+                                {row.층_구분}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-right text-gray-700">{row.보증금.toLocaleString()}만</td>
+                            <td className="px-3 py-2 text-right text-gray-700">{row.월세.toLocaleString()}만</td>
+                            <td className="px-3 py-2 text-right text-gray-500">{row.전용평수}평</td>
+                            <td className="px-4 py-2 text-right font-medium text-gray-900">{row.전용평단가}만/평</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+
+              {/* 실거래 사례 탭 */}
+              {activeTab === 'history' && (
+                <div className="overflow-x-auto max-h-96 overflow-y-auto">
+                  {(!result.history || result.history.length === 0) ? (
+                    <p className="text-center text-gray-400 text-sm py-8">실거래 사례가 없습니다.</p>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50 sticky top-0">
+                        <tr>
+                          <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium">주소</th>
+                          <th className="text-center px-3 py-2 text-xs text-gray-500 font-medium">층구분</th>
+                          <th className="text-right px-3 py-2 text-xs text-gray-500 font-medium">보증금</th>
+                          <th className="text-right px-3 py-2 text-xs text-gray-500 font-medium">월세</th>
+                          <th className="text-right px-3 py-2 text-xs text-gray-500 font-medium">전용평수</th>
+                          <th className="text-right px-4 py-2 text-xs text-gray-500 font-medium">평단가</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {result.history.map(row => (
+                          <tr key={row.id} className="hover:bg-gray-50">
+                            <td className="px-4 py-2 text-gray-700 max-w-[180px] truncate" title={row.주소}>
+                              {row.주소}
+                            </td>
+                            <td className="px-3 py-2 text-center">
+                              <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${floorBadgeStyle[row.층_구분] ?? 'bg-gray-100 text-gray-600'}`}>
+                                {row.층_구분}
+                              </span>
+                            </td>
+                            <td className="px-3 py-2 text-right text-gray-700">{row.보증금.toLocaleString()}만</td>
+                            <td className="px-3 py-2 text-right text-gray-700">{row.월세.toLocaleString()}만</td>
+                            <td className="px-3 py-2 text-right text-gray-500">{row.전용평수}평</td>
+                            <td className="px-4 py-2 text-right font-medium text-gray-900">{row.전용평단가}만/평</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              )}
+
+              {/* 협상 포인트 탭 */}
+              {activeTab === 'negotiation' && (
+                <div className="p-6 space-y-3">
+                  {(!result.negotiationHints || result.negotiationHints.length === 0) ? (
+                    <p className="text-center text-gray-400 text-sm py-4">협상 포인트 정보가 없습니다.</p>
+                  ) : (
+                    result.negotiationHints.map((hint, idx) => (
+                      <div key={idx} className="flex items-start gap-3 bg-blue-50 border border-blue-100 rounded-lg px-4 py-3">
+                        <span className="text-blue-500 font-bold mt-0.5 flex-shrink-0">&#10003;</span>
+                        <p className="text-sm text-gray-700 leading-relaxed">{hint}</p>
+                      </div>
+                    ))
+                  )}
+                </div>
+              )}
             </div>
 
             {/* 면책 문구 */}

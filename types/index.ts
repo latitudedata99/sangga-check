@@ -59,6 +59,7 @@ export interface HistoryRow {
   보증금: number
   월세: number
   전용평수: number
+  전용평단가: number
   월세평단가: number
   주소: string
 }
