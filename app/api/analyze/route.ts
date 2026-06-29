@@ -52,13 +52,15 @@ export async function POST(req: NextRequest) {
   try {
     const supabase = await createClient()
 
-    // 5개 RPC 병렬 호출
-    const [summaryRes, floorRes, distRes, listingsRes, historyRes] = await Promise.all([
+    // 7개 RPC 병렬 호출
+    const [summaryRes, floorRes, distRes, listingsRes, historyRes, priceGapRes, areaSegRes] = await Promise.all([
       supabase.rpc('get_sg_rent_summary', { p_lng: lng, p_lat: lat, p_radius: radius }),
       supabase.rpc('get_sg_rent_stats',   { p_lng: lng, p_lat: lat, p_radius: radius }),
       supabase.rpc('get_sg_rent_distribution', { p_lng: lng, p_lat: lat, p_radius: radius }),
       supabase.rpc('get_sg_rent_listings', { p_lng: lng, p_lat: lat, p_radius: radius }),
       supabase.rpc('get_sg_rent_history_nearby', { p_lng: lng, p_lat: lat, p_radius: radius }),
+      supabase.rpc('get_price_gap_analysis', { p_lng: lng, p_lat: lat, p_radius: radius }),
+      supabase.rpc('get_area_segment_stats', { p_lng: lng, p_lat: lat, p_radius: radius }),
     ])
 
     if (summaryRes.error) throw summaryRes.error
@@ -151,6 +153,19 @@ export async function POST(req: NextRequest) {
         listings,
         history,
         negotiationHints,
+        priceGap: (priceGapRes.data ?? []).map((r: Record<string, unknown>) => ({
+          floorType:        r.floor_type as string,
+          avgListingPrice:  Number(r.avg_listing_price),
+          avgActualPrice:   Number(r.avg_actual_price),
+          gapPct:           Number(r.gap_pct),
+        })),
+        areaSegments: (areaSegRes.data ?? []).map((r: Record<string, unknown>) => ({
+          segment:     r.segment as string,
+          areaRange:   r.area_range as string,
+          count:       Number(r.cnt),
+          avgPrice:    Number(r.avg_price),
+          medianPrice: Number(r.median_price),
+        })),
       },
     })
   } catch (e) {

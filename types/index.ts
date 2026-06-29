@@ -49,6 +49,19 @@ export interface AnalyzeResult {
   listings: SgRentRow[] | null
   history: HistoryRow[] | null
   negotiationHints: string[] | null
+  priceGap: Array<{
+    floorType: string
+    avgListingPrice: number
+    avgActualPrice: number
+    gapPct: number
+  }>
+  areaSegments: Array<{
+    segment: string
+    areaRange: string
+    count: number
+    avgPrice: number
+    medianPrice: number
+  }>
 }
 
 export interface HistoryRow {

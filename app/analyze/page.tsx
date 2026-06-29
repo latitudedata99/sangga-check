@@ -264,6 +264,75 @@ export default function AnalyzePage() {
               )}
             </div>
 
+            {/* 호가 vs 실거래 괴리율 */}
+            {result.priceGap && result.priceGap.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                <h2 className="text-sm font-semibold text-gray-700 mb-1">호가 vs 실거래 괴리율</h2>
+                <p className="text-xs text-gray-400 mb-4">현재 호가가 실거래가 대비 얼마나 높은지 보여줍니다</p>
+                <div className="space-y-3">
+                  {result.priceGap.map(row => (
+                    <div key={row.floorType} className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${floorBadgeStyle[row.floorType as FloorType] ?? 'bg-gray-100 text-gray-600'}`}>
+                          {row.floorType}
+                        </span>
+                        <span className="text-sm text-gray-600">
+                          호가 <span className="font-medium text-gray-900">{row.avgListingPrice}만원/평</span>
+                          <span className="text-gray-400 mx-1">vs</span>
+                          실거래 <span className="font-medium text-gray-900">{row.avgActualPrice}만원/평</span>
+                        </span>
+                      </div>
+                      <span className={`text-sm font-bold ${row.gapPct > 0 ? 'text-red-600' : 'text-gray-400'}`}>
+                        {row.gapPct > 0 ? '+' : ''}{row.gapPct}% {row.gapPct > 0 ? '높음' : ''}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* 면적 구간별 평단가 */}
+            {result.areaSegments && result.areaSegments.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                <h2 className="text-sm font-semibold text-gray-700 mb-1">면적 구간별 평단가</h2>
+                <p className="text-xs text-gray-400 mb-4">전용면적(㎡) 기준</p>
+                <div className="space-y-4">
+                  {result.areaSegments.map(seg => {
+                    const colorMap: Record<string, { bar: string; badge: string }> = {
+                      '소형':   { bar: 'bg-purple-400', badge: 'bg-purple-100 text-purple-700' },
+                      '중소형': { bar: 'bg-blue-400',   badge: 'bg-blue-100 text-blue-700' },
+                      '중형':   { bar: 'bg-green-400',  badge: 'bg-green-100 text-green-700' },
+                      '대형':   { bar: 'bg-orange-400', badge: 'bg-orange-100 text-orange-700' },
+                    }
+                    const color = colorMap[seg.segment] ?? { bar: 'bg-gray-400', badge: 'bg-gray-100 text-gray-600' }
+                    const maxAvg = Math.max(...result.areaSegments.map(s => s.avgPrice))
+                    const barWidth = maxAvg > 0 ? Math.round((seg.avgPrice / maxAvg) * 100) : 0
+
+                    return (
+                      <div key={seg.segment}>
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${color.badge}`}>
+                              {seg.segment}
+                            </span>
+                            <span className="text-xs text-gray-400">{seg.areaRange}</span>
+                          </div>
+                          <div className="text-right">
+                            <span className="text-sm font-bold text-gray-900">{seg.avgPrice}만원/평</span>
+                            <span className="text-xs text-gray-400 ml-2">중앙값 {seg.medianPrice}만원/평</span>
+                            <span className="text-xs text-gray-400 ml-2">({seg.count}개)</span>
+                          </div>
+                        </div>
+                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div className={`h-full ${color.bar} rounded-full transition-all`} style={{ width: `${barWidth}%` }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
             {/* 면책 문구 */}
             <p className="text-xs text-gray-400 text-center leading-relaxed">
               본 서비스는 공개된 호가 데이터를 기반으로 한 정보 제공 서비스입니다.<br />
