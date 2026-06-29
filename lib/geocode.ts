@@ -33,20 +33,21 @@ async function geocodeFromDB(address: string): Promise<GeocodeResult> {
   if (!dongMatch) throw new Error('동 정보를 찾을 수 없습니다')
 
   const supabase = await createClient()
-  let query = supabase
+  const { data, error } = await supabase
     .from('sg_rent')
-    .select('위도, 경도')
+    .select('*')
     .eq('동1', dongMatch[1])
+    .eq('시구', guMatch?.[1] ?? '')
     .not('위도', 'is', null)
     .limit(200)
 
-  if (guMatch) query = query.eq('시구', guMatch[1])
-
-  const { data, error } = await query
   if (error || !data?.length) throw new Error('해당 동의 매물 정보가 없습니다')
 
-  const lat = data.reduce((s: number, r: { 위도: number }) => s + Number(r.위도), 0) / data.length
-  const lng = data.reduce((s: number, r: { 경도: number }) => s + Number(r.경도), 0) / data.length
+  const len = data.length
+  let sumLat = 0, sumLng = 0
+  for (const r of data) { sumLat += Number(r.위도); sumLng += Number(r.경도) }
+  const lat = sumLat / len
+  const lng = sumLng / len
 
   return { address, roadAddress: `${guMatch?.[1] ?? ''} ${dongMatch[1]} 중심 (근사값)`, lat, lng }
 }
