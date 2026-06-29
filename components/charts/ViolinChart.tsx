@@ -4,25 +4,10 @@ import { FloorType } from '@/types'
 
 const FLOOR_ORDER: FloorType[] = ['1층', '지상층', '지하층']
 
-const COLORS: Record<FloorType, { fill: string; stroke: string; label: string }> = {
-  '1층':   { fill: '#bfdbfe', stroke: '#2563eb', label: '1층' },
-  '지상층': { fill: '#bbf7d0', stroke: '#16a34a', label: '지상층' },
-  '지하층': { fill: '#fecaca', stroke: '#dc2626', label: '지하층' },
-}
-
-function epanechnikov(bw: number) {
-  return (u: number) => {
-    const x = u / bw
-    return Math.abs(x) <= 1 ? (0.75 * (1 - x * x)) / bw : 0
-  }
-}
-
-function kde(kernel: (u: number) => number, values: number[], thresholds: number[]) {
-  const n = values.length
-  return thresholds.map(t => ({
-    t,
-    d: values.reduce((s, v) => s + kernel(t - v), 0) / n,
-  }))
+const COLORS: Record<FloorType, { fill: string; stroke: string }> = {
+  '1층':   { fill: '#3b82f6', stroke: '#1d4ed8' },
+  '지상층': { fill: '#22c55e', stroke: '#15803d' },
+  '지하층': { fill: '#ef4444', stroke: '#b91c1c' },
 }
 
 function quantile(sorted: number[], q: number) {
@@ -30,6 +15,12 @@ function quantile(sorted: number[], q: number) {
   const lo = Math.floor(idx)
   const hi = Math.ceil(idx)
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo)
+}
+
+// 결정론적 지터 (렌더마다 동일 위치)
+function jitter(v: number, i: number, spread: number): number {
+  const x = Math.sin(v * 127.1 + i * 311.7) * 43758.5453
+  return (x - Math.floor(x) - 0.5) * 2 * spread
 }
 
 interface Props {
@@ -45,8 +36,8 @@ export default function ViolinChart({ distribution }: Props) {
 
   const allVals = FLOOR_ORDER.flatMap(f => distribution[f] ?? [])
 
-  const violins = useMemo(() => {
-    if (!allVals.length) return []
+  const data = useMemo(() => {
+    if (!allVals.length) return null
 
     const globalMin = Math.min(...allVals)
     const globalMax = Math.max(...allVals)
@@ -56,54 +47,35 @@ export default function ViolinChart({ distribution }: Props) {
 
     const yScale = (v: number) => iH - ((v - yMin) / (yMax - yMin)) * iH
     const colW = iW / FLOOR_ORDER.length
+    const spread = colW * 0.28
 
-    const STEPS = 100
-    const thresholds = Array.from({ length: STEPS }, (_, i) => yMin + (yMax - yMin) * (i / (STEPS - 1)))
-
-    const result = FLOOR_ORDER.map((floor, idx) => {
+    const items = FLOOR_ORDER.map((floor, idx) => {
       const vals = (distribution[floor] ?? []).filter(v => v > 0)
       if (vals.length < 3) return null
 
       const sorted = [...vals].sort((a, b) => a - b)
-      const q1     = quantile(sorted, 0.25)
-      const q3     = quantile(sorted, 0.75)
-      const med    = quantile(sorted, 0.5)
-      const bw     = Math.max((q3 - q1) * 0.5, 0.5)
+      const q1  = quantile(sorted, 0.25)
+      const q3  = quantile(sorted, 0.75)
+      const med = quantile(sorted, 0.5)
+      const cx  = colW * (idx + 0.5)
 
-      const density = kde(epanechnikov(bw), vals, thresholds)
-      const maxD    = Math.max(...density.map(p => p.d), 1e-9)
-      const violinW = colW * 0.72
-      const cx      = colW * (idx + 0.5)
+      const dots = vals.map((v, i) => ({
+        x: cx + jitter(v, i, spread),
+        y: yScale(v),
+      }))
 
-      // violin 경로 (left → top → right → bottom → close)
-      const left  = density.map(p => [cx - (p.d / maxD) * (violinW / 2), yScale(p.t)] as [number, number])
-      const right = [...density].reverse().map(p => [cx + (p.d / maxD) * (violinW / 2), yScale(p.t)] as [number, number])
-      const pts   = [...left, ...right]
-      const path  = pts.map(([x, y], i) => `${i === 0 ? 'M' : 'L'}${x.toFixed(1)} ${y.toFixed(1)}`).join(' ') + ' Z'
-
-      // 위스커: IQR 1.5배 범위 내 실제 최소/최대
-      const loFence = q1 - 1.5 * (q3 - q1)
-      const hiFence = q3 + 1.5 * (q3 - q1)
-      const wLo = sorted.find(v => v >= loFence) ?? sorted[0]
-      const wHi = [...sorted].reverse().find(v => v <= hiFence) ?? sorted[sorted.length - 1]
-
-      return {
-        floor, path, cx,
-        yMed: yScale(med), yQ1: yScale(q1), yQ3: yScale(q3),
-        yWLo: yScale(wLo), yWHi: yScale(wHi),
-        med, q1, q3, count: vals.length, yMin, yMax,
-      }
+      return { floor, cx, dots, yMed: yScale(med), med, count: vals.length }
     })
 
-    return { items: result.filter(Boolean), yMin, yMax, yScale }
+    return { items: items.filter(Boolean), yMin, yMax, yScale }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(distribution)])
 
-  if (!allVals.length || typeof violins === 'undefined' || !('items' in violins)) {
+  if (!allVals.length || !data) {
     return <div className="text-sm text-gray-400 text-center py-8">분포 데이터 없음</div>
   }
 
-  const { items, yMin, yMax, yScale } = violins
+  const { items, yMin, yMax, yScale } = data
   const TICK_COUNT = 6
   const yTicks = Array.from({ length: TICK_COUNT }, (_, i) => yMin + (yMax - yMin) * i / (TICK_COUNT - 1))
 
@@ -122,33 +94,28 @@ export default function ViolinChart({ distribution }: Props) {
             </g>
           ))}
 
-          {/* Y축 선 */}
           <line x1={0} y1={0} x2={0} y2={iH} stroke="#d1d5db" />
 
-          {/* 바이올린들 */}
           {items.map(v => {
             if (!v) return null
             const c = COLORS[v.floor as FloorType]
-            const bxW = 12
             return (
               <g key={v.floor}>
-                {/* violin 몸통 */}
-                <path d={v.path} fill={c.fill} stroke={c.stroke} strokeWidth={1.5} opacity={0.9} />
-
-                {/* 위스커 */}
-                <line x1={v.cx} x2={v.cx} y1={v.yWHi} y2={v.yQ3} stroke={c.stroke} strokeWidth={1.5} strokeDasharray="3 2" />
-                <line x1={v.cx} x2={v.cx} y1={v.yQ1} y2={v.yWLo} stroke={c.stroke} strokeWidth={1.5} strokeDasharray="3 2" />
-
-                {/* IQR 박스 */}
-                <rect
-                  x={v.cx - bxW / 2} y={v.yQ3}
-                  width={bxW} height={Math.max(v.yQ1 - v.yQ3, 0)}
-                  fill="white" stroke={c.stroke} strokeWidth={2} rx={2}
-                />
+                {/* 데이터 점들 */}
+                {v.dots.map((d, i) => (
+                  <circle
+                    key={i}
+                    cx={d.x.toFixed(1)}
+                    cy={d.y.toFixed(1)}
+                    r={3}
+                    fill={c.fill}
+                    opacity={0.55}
+                  />
+                ))}
 
                 {/* 중앙값 선 */}
                 <line
-                  x1={v.cx - bxW / 2 - 2} x2={v.cx + bxW / 2 + 2}
+                  x1={v.cx - 20} x2={v.cx + 20}
                   y1={v.yMed} y2={v.yMed}
                   stroke={c.stroke} strokeWidth={3}
                 />
@@ -183,14 +150,10 @@ export default function ViolinChart({ distribution }: Props) {
       <div className="flex justify-center gap-6 mt-2">
         {FLOOR_ORDER.map(f => (
           <div key={f} className="flex items-center gap-1.5">
-            <div className="w-3 h-3 rounded-sm" style={{ backgroundColor: COLORS[f as FloorType].fill, border: `1.5px solid ${COLORS[f as FloorType].stroke}` }} />
+            <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[f as FloorType].fill }} />
             <span className="text-xs text-gray-600">{f}</span>
           </div>
         ))}
-        <div className="flex items-center gap-1.5">
-          <div className="w-5 border-t-2 border-gray-400" style={{ borderStyle: 'dashed' }} />
-          <span className="text-xs text-gray-500">IQR 범위</span>
-        </div>
         <div className="flex items-center gap-1.5">
           <div className="w-5 border-t-[3px]" style={{ borderColor: '#374151' }} />
           <span className="text-xs text-gray-500">중앙값</span>
