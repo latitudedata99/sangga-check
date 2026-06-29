@@ -57,10 +57,7 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult> {
   try {
     return await geocodeKakao(address)
   } catch (e) {
-    const msg = e instanceof Error ? e.message : ''
-    if (!msg.startsWith('kakao_4')) throw new Error('주소를 찾을 수 없습니다')
-    // kakao 403/401 → 권한 없음 → 폴백
-    console.warn('[geocode] 카카오 Local API 미활성 → DB 폴백')
+    console.warn('[geocode] 카카오 실패 → DB 폴백:', e instanceof Error ? e.message : e)
   }
 
   // 2차: 자체 DB 기반 (동 중심 좌표)
