@@ -5,7 +5,7 @@ import dynamic from 'next/dynamic'
 import { AnalyzeResult } from '@/types'
 import ViolinChart from '@/components/charts/ViolinChart'
 
-const MapView = dynamic(() => import('@/components/map/MapView'), { ssr: false })
+const KakaoMap = dynamic(() => import('@/components/map/KakaoMap'), { ssr: false })
 
 export default function AnalyzePage() {
   const [address, setAddress] = useState('')
@@ -86,7 +86,7 @@ export default function AnalyzePage() {
           <div className="space-y-6">
             {/* 지도 */}
             <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
-              <MapView lat={result.lat} lng={result.lng} radius={result.radius} address={result.address} />
+              <KakaoMap lat={result.lat} lng={result.lng} radius={result.radius} address={result.address} />
               <p className="text-xs text-gray-400 text-center py-2">
                 📍 {result.address} · 반경 {result.radius}m
               </p>
