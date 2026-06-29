@@ -17,7 +17,6 @@ function quantile(sorted: number[], q: number) {
   return sorted[lo] + (sorted[hi] - sorted[lo]) * (idx - lo)
 }
 
-// 결정론적 지터 (렌더마다 동일 위치)
 function jitter(v: number, i: number, spread: number): number {
   const x = Math.sin(v * 127.1 + i * 311.7) * 43758.5453
   return (x - Math.floor(x) - 0.5) * 2 * spread
@@ -29,8 +28,8 @@ interface Props {
 
 export default function ViolinChart({ distribution }: Props) {
   const W = 560
-  const H = 380
-  const mg = { top: 30, right: 30, bottom: 60, left: 58 }
+  const H = 400
+  const mg = { top: 30, right: 30, bottom: 70, left: 58 }
   const iW = W - mg.left - mg.right
   const iH = H - mg.top - mg.bottom
 
@@ -47,7 +46,7 @@ export default function ViolinChart({ distribution }: Props) {
 
     const yScale = (v: number) => iH - ((v - yMin) / (yMax - yMin)) * iH
     const colW = iW / FLOOR_ORDER.length
-    const spread = colW * 0.28
+    const spread = colW * 0.25
 
     const items = FLOOR_ORDER.map((floor, idx) => {
       const vals = (distribution[floor] ?? []).filter(v => v > 0)
@@ -57,14 +56,24 @@ export default function ViolinChart({ distribution }: Props) {
       const q1  = quantile(sorted, 0.25)
       const q3  = quantile(sorted, 0.75)
       const med = quantile(sorted, 0.5)
-      const cx  = colW * (idx + 0.5)
+      const avg = vals.reduce((s, v) => s + v, 0) / vals.length
 
-      const dots = vals.map((v, i) => ({
-        x: cx + jitter(v, i, spread),
-        y: yScale(v),
-      }))
+      const iqr = q3 - q1
+      const loFence = q1 - 1.5 * iqr
+      const hiFence = q3 + 1.5 * iqr
+      const wLo = sorted.find(v => v >= loFence) ?? sorted[0]
+      const wHi = [...sorted].reverse().find(v => v <= hiFence) ?? sorted[sorted.length - 1]
 
-      return { floor, cx, dots, yMed: yScale(med), med, count: vals.length }
+      const cx = colW * (idx + 0.5)
+      const dots = vals.map((v, i) => ({ x: cx + jitter(v, i, spread), y: yScale(v) }))
+
+      return {
+        floor, cx, dots,
+        yMed: yScale(med), yAvg: yScale(avg),
+        yQ1: yScale(q1), yQ3: yScale(q3),
+        yWLo: yScale(wLo), yWHi: yScale(wHi),
+        med, avg, count: vals.length,
+      }
     })
 
     return { items: items.filter(Boolean), yMin, yMax, yScale }
@@ -99,37 +108,60 @@ export default function ViolinChart({ distribution }: Props) {
           {items.map(v => {
             if (!v) return null
             const c = COLORS[v.floor as FloorType]
+            const bxW = 14  // IQR 박스 반너비
+            const wkW = 8   // 위스커 캡 반너비
+
             return (
               <g key={v.floor}>
                 {/* 데이터 점들 */}
                 {v.dots.map((d, i) => (
-                  <circle
-                    key={i}
-                    cx={d.x.toFixed(1)}
-                    cy={d.y.toFixed(1)}
-                    r={3}
-                    fill={c.fill}
-                    opacity={0.55}
-                  />
+                  <circle key={i} cx={d.x.toFixed(1)} cy={d.y.toFixed(1)} r={3} fill={c.fill} opacity={0.45} />
                 ))}
+
+                {/* 위스커 선 (Q3 위) */}
+                <line x1={v.cx} x2={v.cx} y1={v.yWHi} y2={v.yQ3} stroke={c.stroke} strokeWidth={1.5} />
+                {/* 위스커 캡 (상단) */}
+                <line x1={v.cx - wkW} x2={v.cx + wkW} y1={v.yWHi} y2={v.yWHi} stroke={c.stroke} strokeWidth={1.5} />
+
+                {/* 위스커 선 (Q1 아래) */}
+                <line x1={v.cx} x2={v.cx} y1={v.yQ1} y2={v.yWLo} stroke={c.stroke} strokeWidth={1.5} />
+                {/* 위스커 캡 (하단) */}
+                <line x1={v.cx - wkW} x2={v.cx + wkW} y1={v.yWLo} y2={v.yWLo} stroke={c.stroke} strokeWidth={1.5} />
+
+                {/* IQR 박스 */}
+                <rect
+                  x={v.cx - bxW} y={v.yQ3}
+                  width={bxW * 2} height={Math.max(v.yQ1 - v.yQ3, 0)}
+                  fill="white" fillOpacity={0.6}
+                  stroke={c.stroke} strokeWidth={1.5} rx={2}
+                />
 
                 {/* 중앙값 선 */}
                 <line
-                  x1={v.cx - 20} x2={v.cx + 20}
+                  x1={v.cx - bxW} x2={v.cx + bxW}
                   y1={v.yMed} y2={v.yMed}
                   stroke={c.stroke} strokeWidth={3}
                 />
 
-                {/* 중앙값 레이블 */}
-                <text x={v.cx} y={v.yMed - 9} textAnchor="middle" fontSize={11} fontWeight="700" fill={c.stroke}>
-                  {v.med.toFixed(1)}
-                </text>
+                {/* 평균 다이아몬드 */}
+                <polygon
+                  points={[
+                    `${v.cx},${v.yAvg - 6}`,
+                    `${v.cx + 6},${v.yAvg}`,
+                    `${v.cx},${v.yAvg + 6}`,
+                    `${v.cx - 6},${v.yAvg}`,
+                  ].join(' ')}
+                  fill="white" stroke={c.stroke} strokeWidth={1.5}
+                />
 
                 {/* X 레이블 */}
-                <text x={v.cx} y={iH + 22} textAnchor="middle" fontSize={13} fontWeight="600" fill="#1f2937">
+                <text x={v.cx} y={iH + 20} textAnchor="middle" fontSize={13} fontWeight="600" fill="#1f2937">
                   {v.floor}
                 </text>
-                <text x={v.cx} y={iH + 38} textAnchor="middle" fontSize={10} fill="#9ca3af">
+                <text x={v.cx} y={iH + 35} textAnchor="middle" fontSize={10} fill="#6b7280">
+                  중앙 {v.med.toFixed(1)} · 평균 {v.avg.toFixed(1)}
+                </text>
+                <text x={v.cx} y={iH + 50} textAnchor="middle" fontSize={10} fill="#9ca3af">
                   {v.count.toLocaleString()}개
                 </text>
               </g>
@@ -147,7 +179,7 @@ export default function ViolinChart({ distribution }: Props) {
       </svg>
 
       {/* 범례 */}
-      <div className="flex justify-center gap-6 mt-2">
+      <div className="flex flex-wrap justify-center gap-x-5 gap-y-1.5 mt-3">
         {FLOOR_ORDER.map(f => (
           <div key={f} className="flex items-center gap-1.5">
             <div className="w-3 h-3 rounded-full" style={{ backgroundColor: COLORS[f as FloorType].fill }} />
@@ -155,8 +187,18 @@ export default function ViolinChart({ distribution }: Props) {
           </div>
         ))}
         <div className="flex items-center gap-1.5">
-          <div className="w-5 border-t-[3px]" style={{ borderColor: '#374151' }} />
-          <span className="text-xs text-gray-500">중앙값</span>
+          <svg width="14" height="14" viewBox="0 0 14 14">
+            <line x1="7" y1="0" x2="7" y2="14" stroke="#6b7280" strokeWidth="2" />
+            <rect x="3" y="3" width="8" height="8" fill="white" stroke="#6b7280" strokeWidth="1.5" rx="1" />
+            <line x1="3" y1="7" x2="11" y2="7" stroke="#374151" strokeWidth="2.5" />
+          </svg>
+          <span className="text-xs text-gray-500">위스커·IQR·중앙값</span>
+        </div>
+        <div className="flex items-center gap-1.5">
+          <svg width="14" height="14" viewBox="0 0 14 14">
+            <polygon points="7,1 13,7 7,13 1,7" fill="white" stroke="#6b7280" strokeWidth="1.5" />
+          </svg>
+          <span className="text-xs text-gray-500">평균</span>
         </div>
       </div>
     </div>
