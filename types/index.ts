@@ -64,6 +64,16 @@ export interface AnalyzeResult {
   }>
   competition: Array<{ category: string; code: string; count: number }>
   transit: Array<{ name: string; distance: number }>
+  businessDist: {
+    totalBiz: number
+    sampled: number
+    byLcls: Array<{
+      name: string
+      count: number
+      pct: number
+      topMcls: Array<{ name: string; count: number }>
+    }>
+  } | null
 }
 
 export interface HistoryRow {

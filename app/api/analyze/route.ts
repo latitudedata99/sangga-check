@@ -38,6 +38,60 @@ async function fetchNearestSubway(lng: number, lat: number) {
   }))
 }
 
+// ── 소상공인시장진흥공단 업종 분포 ─────────────────────────────
+interface BizDistItem {
+  name: string
+  count: number
+  pct: number
+  topMcls: Array<{ name: string; count: number }>
+}
+
+async function fetchBusinessDistribution(lat: number, lng: number, radius: number) {
+  const key = process.env.DATA_GO_KR_KEY
+  if (!key) return null
+  try {
+    const url = `https://apis.data.go.kr/B553077/api/open/sdsc2/storeListInRadius?serviceKey=${encodeURIComponent(key)}&pageNo=1&numOfRows=1000&radius=${radius}&cx=${lng}&cy=${lat}&type=json`
+    const res = await fetch(url, { cache: 'no-store' })
+    if (!res.ok) return null
+
+    const data = await res.json()
+    if (data.header?.resultCode !== '00') return null
+
+    const items = (data.body?.items ?? []) as Record<string, string>[]
+    const totalBiz: number = data.body?.totalCount ?? 0
+    const sampled = items.length
+    if (sampled === 0) return { totalBiz: 0, sampled: 0, byLcls: [] }
+
+    const lcls: Record<string, { count: number; mcls: Record<string, number> }> = {}
+    for (const item of items) {
+      const lnm = item.indsLclsNm
+      const mnm = item.indsMclsNm
+      if (!lcls[lnm]) lcls[lnm] = { count: 0, mcls: {} }
+      lcls[lnm].count++
+      lcls[lnm].mcls[mnm] = (lcls[lnm].mcls[mnm] ?? 0) + 1
+    }
+
+    const ratio = totalBiz / sampled
+
+    const byLcls: BizDistItem[] = Object.entries(lcls)
+      .sort((a, b) => b[1].count - a[1].count)
+      .slice(0, 8)
+      .map(([name, v]) => ({
+        name,
+        count: Math.round(v.count * ratio),
+        pct: Math.round((v.count / sampled) * 1000) / 10,
+        topMcls: Object.entries(v.mcls)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 3)
+          .map(([n, c]) => ({ name: n, count: Math.round(c * ratio) })),
+      }))
+
+    return { totalBiz, sampled, byLcls }
+  } catch {
+    return null
+  }
+}
+
 function buildNegotiationHints(
   medianPrice: number,
   avgPrice: number,
@@ -87,11 +141,12 @@ export async function POST(req: NextRequest) {
   try {
     const supabase = await createClient()
 
-    // 7개 RPC + 카카오 API 병렬 호출
+    // 7개 RPC + 카카오 API + 소상공인 API 병렬 호출
     const [
       [summaryRes, floorRes, distRes, listingsRes, historyRes, priceGapRes, areaSegRes],
       competitionData,
       transitData,
+      businessDist,
     ] = await Promise.all([
       Promise.all([
         supabase.rpc('get_sg_rent_summary', { p_lng: lng, p_lat: lat, p_radius: radius }),
@@ -112,6 +167,7 @@ export async function POST(req: NextRequest) {
         )
       ),
       fetchNearestSubway(lng, lat),
+      fetchBusinessDistribution(lat, lng, radius),
     ])
 
     if (summaryRes.error) throw summaryRes.error
@@ -219,6 +275,7 @@ export async function POST(req: NextRequest) {
         })),
         competition: competitionData,
         transit: transitData,
+        businessDist,
       },
     })
   } catch (e) {

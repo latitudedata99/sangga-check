@@ -7,7 +7,7 @@ import ViolinChart from '@/components/charts/ViolinChart'
 
 const KakaoMap = dynamic(() => import('@/components/map/KakaoMap'), { ssr: false })
 
-type DetailTab = 'listings' | 'history' | 'negotiation'
+type DetailTab = 'history' | 'negotiation'
 
 const floorBadgeStyle: Record<FloorType, string> = {
   '1층':  'bg-blue-100 text-blue-700',
@@ -20,7 +20,7 @@ export default function AnalyzePage() {
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState<AnalyzeResult | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<DetailTab>('listings')
+  const [activeTab, setActiveTab] = useState<DetailTab>('history')
 
   async function handleAnalyze() {
     if (!address.trim()) return
@@ -148,7 +148,6 @@ export default function AnalyzePage() {
               <div className="flex border-b border-gray-200">
                 {(
                   [
-                    { key: 'listings',    label: '매물 리스트' },
                     { key: 'history',     label: '실거래 사례' },
                     { key: 'negotiation', label: '협상 포인트' },
                   ] as { key: DetailTab; label: string }[]
@@ -166,46 +165,6 @@ export default function AnalyzePage() {
                   </button>
                 ))}
               </div>
-
-              {/* 매물 리스트 탭 */}
-              {activeTab === 'listings' && (
-                <div className="overflow-x-auto max-h-96 overflow-y-auto">
-                  {(!result.listings || result.listings.length === 0) ? (
-                    <p className="text-center text-gray-400 text-sm py-8">매물 데이터가 없습니다.</p>
-                  ) : (
-                    <table className="w-full text-sm">
-                      <thead className="bg-gray-50 sticky top-0">
-                        <tr>
-                          <th className="text-left px-4 py-2 text-xs text-gray-500 font-medium">주소</th>
-                          <th className="text-center px-3 py-2 text-xs text-gray-500 font-medium">층구분</th>
-                          <th className="text-right px-3 py-2 text-xs text-gray-500 font-medium">보증금</th>
-                          <th className="text-right px-3 py-2 text-xs text-gray-500 font-medium">월세</th>
-                          <th className="text-right px-3 py-2 text-xs text-gray-500 font-medium">전용평수</th>
-                          <th className="text-right px-4 py-2 text-xs text-gray-500 font-medium">평단가</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {result.listings.map(row => (
-                          <tr key={row.id} className="hover:bg-gray-50">
-                            <td className="px-4 py-2 text-gray-700 max-w-[180px] truncate" title={row.주소}>
-                              {row.주소}
-                            </td>
-                            <td className="px-3 py-2 text-center">
-                              <span className={`inline-block text-xs font-medium px-2 py-0.5 rounded-full ${floorBadgeStyle[row.층_구분] ?? 'bg-gray-100 text-gray-600'}`}>
-                                {row.층_구분}
-                              </span>
-                            </td>
-                            <td className="px-3 py-2 text-right text-gray-700">{row.보증금.toLocaleString()}만</td>
-                            <td className="px-3 py-2 text-right text-gray-700">{row.월세.toLocaleString()}만</td>
-                            <td className="px-3 py-2 text-right text-gray-500">{row.전용평수}평</td>
-                            <td className="px-4 py-2 text-right font-medium text-gray-900">{row.전용평단가}만/평</td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              )}
 
               {/* 실거래 사례 탭 */}
               {activeTab === 'history' && (
@@ -359,6 +318,48 @@ export default function AnalyzePage() {
                     )
                   })}
                 </div>
+              </div>
+            )}
+
+            {/* 소상공인 업종 분포 */}
+            {result.businessDist && result.businessDist.totalBiz > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                <h2 className="text-sm font-semibold text-gray-700 mb-1">반경 {result.radius}m 내 업종 분포</h2>
+                <p className="text-xs text-gray-400 mb-4">
+                  소상공인시장진흥공단 · 총 {result.businessDist.totalBiz.toLocaleString()}개 업소
+                </p>
+                <div className="space-y-4">
+                  {result.businessDist.byLcls.map(item => {
+                    const maxPct = Math.max(...result.businessDist!.byLcls.map(i => i.pct))
+                    const barWidth = maxPct > 0 ? Math.round((item.pct / maxPct) * 100) : 0
+                    return (
+                      <div key={item.name}>
+                        <div className="flex items-start justify-between mb-1">
+                          <div>
+                            <span className="text-sm font-medium text-gray-800">{item.name}</span>
+                            {item.topMcls.length > 0 && (
+                              <span className="text-xs text-gray-400 ml-2">
+                                {item.topMcls.map(m => m.name).join(' · ')}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-right flex-shrink-0 ml-2">
+                            <span className="text-sm font-medium text-gray-900">{item.count.toLocaleString()}개</span>
+                            <span className="text-xs text-gray-400 ml-1">{item.pct}%</span>
+                          </div>
+                        </div>
+                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div className="h-full bg-indigo-400 rounded-full" style={{ width: `${barWidth}%` }} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+                {result.businessDist.sampled < result.businessDist.totalBiz && (
+                  <p className="text-xs text-gray-400 mt-3">
+                    * 상위 {result.businessDist.sampled.toLocaleString()}개 샘플 기준 추정값
+                  </p>
+                )}
               </div>
             )}
 
