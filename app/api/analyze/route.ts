@@ -60,7 +60,7 @@ async function fetchBusinessDistribution(lat: number, lng: number, radius: numbe
     const items = (data.body?.items ?? []) as Record<string, string>[]
     const totalBiz: number = data.body?.totalCount ?? 0
     const sampled = items.length
-    if (sampled === 0) return { totalBiz: 0, sampled: 0, byLcls: [] }
+    if (sampled === 0) return { totalBiz: 0, sampled: 0, byLcls: [], byFloor: [] }
 
     function mapFloor(flrNo: string): string | null {
       if (!flrNo) return null
