@@ -72,7 +72,7 @@ export default function ViolinChart({ distribution }: Props) {
         yMed: yScale(med), yAvg: yScale(avg),
         yQ1: yScale(q1), yQ3: yScale(q3),
         yWLo: yScale(wLo), yWHi: yScale(wHi),
-        med, avg, count: vals.length,
+        med, avg, wLo, wHi, count: vals.length,
       }
     })
 
@@ -118,6 +118,11 @@ export default function ViolinChart({ distribution }: Props) {
                   <circle key={i} cx={d.x.toFixed(1)} cy={d.y.toFixed(1)} r={3} fill={c.fill} opacity={0.45} />
                 ))}
 
+                {/* max 레이블 */}
+                <text x={v.cx} y={v.yWHi - 7} textAnchor="middle" fontSize={9.5} fill={c.stroke} fontWeight="600">
+                  max: {v.wHi.toFixed(1)}
+                </text>
+
                 {/* 위스커 선 (Q3 위) */}
                 <line x1={v.cx} x2={v.cx} y1={v.yWHi} y2={v.yQ3} stroke={c.stroke} strokeWidth={1.5} />
                 {/* 위스커 캡 (상단) */}
@@ -127,6 +132,11 @@ export default function ViolinChart({ distribution }: Props) {
                 <line x1={v.cx} x2={v.cx} y1={v.yQ1} y2={v.yWLo} stroke={c.stroke} strokeWidth={1.5} />
                 {/* 위스커 캡 (하단) */}
                 <line x1={v.cx - wkW} x2={v.cx + wkW} y1={v.yWLo} y2={v.yWLo} stroke={c.stroke} strokeWidth={1.5} />
+
+                {/* min 레이블 */}
+                <text x={v.cx} y={v.yWLo + 14} textAnchor="middle" fontSize={9.5} fill={c.stroke} fontWeight="600">
+                  min: {v.wLo.toFixed(1)}
+                </text>
 
                 {/* IQR 박스 */}
                 <rect
