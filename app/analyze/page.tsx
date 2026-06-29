@@ -360,10 +360,10 @@ export default function AnalyzePage() {
               <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
                 <h2 className="text-sm font-semibold text-gray-700 mb-1">반경 {result.radius}m 내 업종 분포</h2>
                 <p className="text-xs text-gray-400 mb-4">
-                  소상공인시장진흥공단 · 총 {result.businessDist.totalBiz.toLocaleString()}개 업소
+                  소상공인시장진흥공단 · 반경 내 전체 업소 {result.businessDist.totalBiz.toLocaleString()}개 기준
                 </p>
 
-                {/* 층별 탭 */}
+                {/* 층별 섹션 */}
                 <div className="space-y-5">
                   {result.businessDist.byFloor.map(floor => (
                     <div key={floor.floorType}>
@@ -371,7 +371,9 @@ export default function AnalyzePage() {
                         <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${floorBadgeStyle[floor.floorType as FloorType] ?? 'bg-gray-100 text-gray-600'}`}>
                           {floor.floorType}
                         </span>
-                        <span className="text-xs text-gray-400">총 {floor.total.toLocaleString()}개</span>
+                        <span className="text-xs text-gray-500">
+                          총 {floor.total.toLocaleString()}개 업소 중 상위 5개 업종
+                        </span>
                       </div>
                       <div className="space-y-2">
                         {floor.topLcls.map(item => {
@@ -381,7 +383,10 @@ export default function AnalyzePage() {
                             <div key={item.name}>
                               <div className="flex items-center justify-between mb-0.5">
                                 <span className="text-xs text-gray-700">{item.name}</span>
-                                <span className="text-xs text-gray-500">{item.count.toLocaleString()}개 <span className="text-gray-400">{item.pct}%</span></span>
+                                <span className="text-xs text-gray-500">
+                                  {item.count.toLocaleString()}개
+                                  <span className="text-gray-400 ml-1">({item.pct}%)</span>
+                                </span>
                               </div>
                               <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
                                 <div className="h-full bg-indigo-400 rounded-full" style={{ width: `${barWidth}%` }} />
@@ -394,11 +399,11 @@ export default function AnalyzePage() {
                   ))}
                 </div>
 
-                {result.businessDist.sampled < result.businessDist.totalBiz && (
-                  <p className="text-xs text-gray-400 mt-4">
-                    * 상위 {result.businessDist.sampled.toLocaleString()}개 샘플 기준 추정값
-                  </p>
-                )}
+                <p className="text-xs text-gray-400 mt-4">
+                  * 비율(%)은 해당 층 전체 업소 수 대비이며, 상위 5개 업종 합계가 100%를 초과하지 않습니다
+                  {result.businessDist.sampled < result.businessDist.totalBiz &&
+                    ` · 상위 ${result.businessDist.sampled.toLocaleString()}개 샘플 기준 추정값`}
+                </p>
               </div>
             )}
 
