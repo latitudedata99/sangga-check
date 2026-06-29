@@ -115,23 +115,40 @@ export default function AnalyzePage() {
                 )}
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-400 mb-1">주변 평균 평단가</p>
-                  <p className="text-xl font-bold text-gray-900">{result.summary.avgPricePerPyeong}<span className="text-sm font-normal text-gray-500">만원/평</span></p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-400 mb-1">주변 중간값 평단가</p>
-                  <p className="text-xl font-bold text-gray-900">{result.summary.medianPricePerPyeong}<span className="text-sm font-normal text-gray-500">만원/평</span></p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-400 mb-1">주변 평균 월세</p>
-                  <p className="text-xl font-bold text-gray-900">{result.summary.avgMonthlyRent}<span className="text-sm font-normal text-gray-500">만원</span></p>
-                </div>
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <p className="text-xs text-gray-400 mb-1">주변 평균 보증금</p>
-                  <p className="text-xl font-bold text-gray-900">{result.summary.avgDeposit}<span className="text-sm font-normal text-gray-500">만원</span></p>
-                </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      <th className="text-left py-2 text-xs text-gray-400 font-medium w-28"></th>
+                      {result.byFloor.map(f => (
+                        <th key={f.floorType} className="text-center py-2 text-xs font-medium">
+                          <span className={`inline-block px-2 py-0.5 rounded-full ${floorBadgeStyle[f.floorType]}`}>
+                            {f.floorType}
+                          </span>
+                          <span className="block text-gray-400 font-normal mt-0.5">{f.count}개</span>
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                    {[
+                      { label: '평균 평단가',   key: 'avgPrice'       as const, unit: '만원/평' },
+                      { label: '중앙값 평단가', key: 'medianPrice'    as const, unit: '만원/평' },
+                      { label: '평균 월세',     key: 'avgMonthlyRent' as const, unit: '만원' },
+                      { label: '평균 보증금',   key: 'avgDeposit'     as const, unit: '만원' },
+                    ].map(row => (
+                      <tr key={row.key}>
+                        <td className="py-2.5 text-xs text-gray-400">{row.label}</td>
+                        {result.byFloor.map(f => (
+                          <td key={f.floorType} className="py-2.5 text-center">
+                            <span className="font-semibold text-gray-900">{f[row.key].toLocaleString()}</span>
+                            <span className="text-xs text-gray-400 ml-0.5">{row.unit}</span>
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
             </div>
 
