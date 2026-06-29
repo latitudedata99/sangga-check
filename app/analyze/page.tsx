@@ -268,46 +268,63 @@ export default function AnalyzePage() {
             )}
 
             {/* 면적 구간별 평단가 */}
-            {result.areaSegments && result.areaSegments.length > 0 && (
-              <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-                <h2 className="text-sm font-semibold text-gray-700 mb-1">면적 구간별 평단가</h2>
-                <p className="text-xs text-gray-400 mb-4">전용면적(㎡) 기준</p>
-                <div className="space-y-4">
-                  {result.areaSegments.map(seg => {
-                    const colorMap: Record<string, { bar: string; badge: string }> = {
-                      '소형':   { bar: 'bg-purple-400', badge: 'bg-purple-100 text-purple-700' },
-                      '중소형': { bar: 'bg-blue-400',   badge: 'bg-blue-100 text-blue-700' },
-                      '중형':   { bar: 'bg-green-400',  badge: 'bg-green-100 text-green-700' },
-                      '대형':   { bar: 'bg-orange-400', badge: 'bg-orange-100 text-orange-700' },
-                    }
-                    const color = colorMap[seg.segment] ?? { bar: 'bg-gray-400', badge: 'bg-gray-100 text-gray-600' }
-                    const maxAvg = Math.max(...result.areaSegments.map(s => s.avgPrice))
-                    const barWidth = maxAvg > 0 ? Math.round((seg.avgPrice / maxAvg) * 100) : 0
-
-                    return (
-                      <div key={seg.segment}>
-                        <div className="flex items-center justify-between mb-1">
-                          <div className="flex items-center gap-2">
-                            <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${color.badge}`}>
-                              {seg.segment}
-                            </span>
-                            <span className="text-xs text-gray-400">{seg.areaRange}</span>
-                          </div>
-                          <div className="text-right">
-                            <span className="text-sm font-bold text-gray-900">{seg.avgPrice}만원/평</span>
-                            <span className="text-xs text-gray-400 ml-2">중앙값 {seg.medianPrice}만원/평</span>
-                            <span className="text-xs text-gray-400 ml-2">({seg.count}개)</span>
-                          </div>
-                        </div>
-                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div className={`h-full ${color.bar} rounded-full transition-all`} style={{ width: `${barWidth}%` }} />
-                        </div>
-                      </div>
-                    )
-                  })}
+            {result.areaSegments && result.areaSegments.length > 0 && (() => {
+              const SEGMENTS = ['소형', '중소형', '중형', '대형']
+              const FLOORS: FloorType[] = ['1층', '지상층', '지하층']
+              const pivot: Record<string, Record<string, typeof result.areaSegments[0]>> = {}
+              const rangeMap: Record<string, string> = {}
+              for (const seg of result.areaSegments) {
+                if (!pivot[seg.segment]) pivot[seg.segment] = {}
+                pivot[seg.segment][seg.floorType] = seg
+                rangeMap[seg.segment] = seg.areaRange
+              }
+              return (
+                <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                  <h2 className="text-sm font-semibold text-gray-700 mb-1">면적 구간별 평단가</h2>
+                  <p className="text-xs text-gray-400 mb-4">전용면적(㎡) 기준 · 평균 평단가(만원/평)</p>
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-100">
+                          <th className="text-left py-2 text-xs text-gray-400 font-medium"></th>
+                          {FLOORS.map(ft => (
+                            <th key={ft} className="text-center py-2 text-xs font-medium">
+                              <span className={`inline-block px-2 py-0.5 rounded-full ${floorBadgeStyle[ft]}`}>{ft}</span>
+                            </th>
+                          ))}
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {SEGMENTS.filter(s => pivot[s]).map(s => (
+                          <tr key={s}>
+                            <td className="py-2.5">
+                              <span className="text-xs font-medium text-gray-700">{s}</span>
+                              <span className="text-xs text-gray-400 ml-1">{rangeMap[s]}</span>
+                            </td>
+                            {FLOORS.map(ft => {
+                              const cell = pivot[s]?.[ft]
+                              return (
+                                <td key={ft} className="py-2.5 text-center">
+                                  {cell ? (
+                                    <>
+                                      <span className="font-semibold text-gray-900">{cell.avgPrice}</span>
+                                      <span className="text-xs text-gray-400 ml-0.5">만/평</span>
+                                      <span className="block text-xs text-gray-400">{cell.count}개</span>
+                                    </>
+                                  ) : (
+                                    <span className="text-xs text-gray-300">—</span>
+                                  )}
+                                </td>
+                              )
+                            })}
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
                 </div>
-              </div>
-            )}
+              )
+            })()}
 
             {/* 반경 내 업종 경쟁 현황 */}
             {result.competition && result.competition.length > 0 && (
@@ -338,42 +355,47 @@ export default function AnalyzePage() {
               </div>
             )}
 
-            {/* 소상공인 업종 분포 */}
+            {/* 소상공인 업종 분포 (층별) */}
             {result.businessDist && result.businessDist.totalBiz > 0 && (
               <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
                 <h2 className="text-sm font-semibold text-gray-700 mb-1">반경 {result.radius}m 내 업종 분포</h2>
                 <p className="text-xs text-gray-400 mb-4">
                   소상공인시장진흥공단 · 총 {result.businessDist.totalBiz.toLocaleString()}개 업소
                 </p>
-                <div className="space-y-4">
-                  {result.businessDist.byLcls.map(item => {
-                    const maxPct = Math.max(...result.businessDist!.byLcls.map(i => i.pct))
-                    const barWidth = maxPct > 0 ? Math.round((item.pct / maxPct) * 100) : 0
-                    return (
-                      <div key={item.name}>
-                        <div className="flex items-start justify-between mb-1">
-                          <div>
-                            <span className="text-sm font-medium text-gray-800">{item.name}</span>
-                            {item.topMcls.length > 0 && (
-                              <span className="text-xs text-gray-400 ml-2">
-                                {item.topMcls.map(m => m.name).join(' · ')}
-                              </span>
-                            )}
-                          </div>
-                          <div className="text-right flex-shrink-0 ml-2">
-                            <span className="text-sm font-medium text-gray-900">{item.count.toLocaleString()}개</span>
-                            <span className="text-xs text-gray-400 ml-1">{item.pct}%</span>
-                          </div>
-                        </div>
-                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div className="h-full bg-indigo-400 rounded-full" style={{ width: `${barWidth}%` }} />
-                        </div>
+
+                {/* 층별 탭 */}
+                <div className="space-y-5">
+                  {result.businessDist.byFloor.map(floor => (
+                    <div key={floor.floorType}>
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${floorBadgeStyle[floor.floorType as FloorType] ?? 'bg-gray-100 text-gray-600'}`}>
+                          {floor.floorType}
+                        </span>
+                        <span className="text-xs text-gray-400">총 {floor.total.toLocaleString()}개</span>
                       </div>
-                    )
-                  })}
+                      <div className="space-y-2">
+                        {floor.topLcls.map(item => {
+                          const maxPct = Math.max(...floor.topLcls.map(i => i.pct))
+                          const barWidth = maxPct > 0 ? Math.round((item.pct / maxPct) * 100) : 0
+                          return (
+                            <div key={item.name}>
+                              <div className="flex items-center justify-between mb-0.5">
+                                <span className="text-xs text-gray-700">{item.name}</span>
+                                <span className="text-xs text-gray-500">{item.count.toLocaleString()}개 <span className="text-gray-400">{item.pct}%</span></span>
+                              </div>
+                              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                <div className="h-full bg-indigo-400 rounded-full" style={{ width: `${barWidth}%` }} />
+                              </div>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    </div>
+                  ))}
                 </div>
+
                 {result.businessDist.sampled < result.businessDist.totalBiz && (
-                  <p className="text-xs text-gray-400 mt-3">
+                  <p className="text-xs text-gray-400 mt-4">
                     * 상위 {result.businessDist.sampled.toLocaleString()}개 샘플 기준 추정값
                   </p>
                 )}

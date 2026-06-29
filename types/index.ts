@@ -58,6 +58,7 @@ export interface AnalyzeResult {
   areaSegments: Array<{
     segment: string
     areaRange: string
+    floorType: string
     count: number
     avgPrice: number
     medianPrice: number
@@ -72,6 +73,11 @@ export interface AnalyzeResult {
       count: number
       pct: number
       topMcls: Array<{ name: string; count: number }>
+    }>
+    byFloor: Array<{
+      floorType: string
+      total: number
+      topLcls: Array<{ name: string; count: number; pct: number }>
     }>
   } | null
 }

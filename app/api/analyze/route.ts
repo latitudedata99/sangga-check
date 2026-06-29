@@ -62,13 +62,25 @@ async function fetchBusinessDistribution(lat: number, lng: number, radius: numbe
     const sampled = items.length
     if (sampled === 0) return { totalBiz: 0, sampled: 0, byLcls: [] }
 
+    function mapFloor(flrNo: string): string | null {
+      if (!flrNo) return null
+      if (flrNo.startsWith('지')) return '지하층'
+      if (flrNo === '1') return '1층'
+      return '지상층'
+    }
+
     const lcls: Record<string, { count: number; mcls: Record<string, number> }> = {}
+    const floorLcls: Record<string, Record<string, number>> = { '1층': {}, '지상층': {}, '지하층': {} }
+
     for (const item of items) {
       const lnm = item.indsLclsNm
       const mnm = item.indsMclsNm
       if (!lcls[lnm]) lcls[lnm] = { count: 0, mcls: {} }
       lcls[lnm].count++
       lcls[lnm].mcls[mnm] = (lcls[lnm].mcls[mnm] ?? 0) + 1
+
+      const ft = mapFloor(item.flrNo)
+      if (ft) floorLcls[ft][lnm] = (floorLcls[ft][lnm] ?? 0) + 1
     }
 
     const ratio = totalBiz / sampled
@@ -86,7 +98,24 @@ async function fetchBusinessDistribution(lat: number, lng: number, radius: numbe
           .map(([n, c]) => ({ name: n, count: Math.round(c * ratio) })),
       }))
 
-    return { totalBiz, sampled, byLcls }
+    const byFloor = (['1층', '지상층', '지하층'] as const).map(ft => {
+      const entries = Object.entries(floorLcls[ft])
+      const total = entries.reduce((s, [, c]) => s + c, 0)
+      return {
+        floorType: ft,
+        total: Math.round(total * ratio),
+        topLcls: entries
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 5)
+          .map(([n, c]) => ({
+            name: n,
+            count: Math.round(c * ratio),
+            pct: total > 0 ? Math.round((c / total) * 1000) / 10 : 0,
+          })),
+      }
+    }).filter(f => f.total > 0)
+
+    return { totalBiz, sampled, byLcls, byFloor }
   } catch {
     return null
   }
@@ -269,6 +298,7 @@ export async function POST(req: NextRequest) {
         areaSegments: (areaSegRes.data ?? []).map((r: Record<string, unknown>) => ({
           segment:     r.segment as string,
           areaRange:   r.area_range as string,
+          floorType:   r.floor_type as string,
           count:       Number(r.cnt),
           avgPrice:    Number(r.avg_price),
           medianPrice: Number(r.median_price),
