@@ -3,6 +3,41 @@ import { createClient } from '@/lib/supabase/server'
 import { computeVerdict, VERDICT_LABEL } from '@/lib/analyze'
 import { FloorStats, FloorType, SgRentRow, HistoryRow } from '@/types'
 
+// ── 카카오 로컬 API ──────────────────────────────────────────
+const KAKAO_CATEGORIES = [
+  { code: 'CE7', name: '카페' },
+  { code: 'FD6', name: '음식점' },
+  { code: 'CS2', name: '편의점' },
+  { code: 'AC5', name: '학원' },
+  { code: 'PM9', name: '약국' },
+  { code: 'HP8', name: '병원' },
+]
+
+async function fetchKakaoCategory(code: string, lng: number, lat: number, radius: number) {
+  const url = `https://dapi.kakao.com/v2/local/search/category.json?category_group_code=${code}&x=${lng}&y=${lat}&radius=${radius}&size=15`
+  const res = await fetch(url, {
+    headers: { Authorization: `KakaoAK ${process.env.KAKAO_REST_API_KEY}` },
+    cache: 'no-store',
+  })
+  if (!res.ok) return { count: 0 }
+  const data = await res.json()
+  return { count: data.meta?.total_count ?? 0 }
+}
+
+async function fetchNearestSubway(lng: number, lat: number) {
+  const url = `https://dapi.kakao.com/v2/local/search/category.json?category_group_code=SW8&x=${lng}&y=${lat}&radius=2000&sort=distance&size=3`
+  const res = await fetch(url, {
+    headers: { Authorization: `KakaoAK ${process.env.KAKAO_REST_API_KEY}` },
+    cache: 'no-store',
+  })
+  if (!res.ok) return []
+  const data = await res.json()
+  return (data.documents ?? []).map((d: Record<string, unknown>) => ({
+    name: d.place_name as string,
+    distance: Number(d.distance),
+  }))
+}
+
 function buildNegotiationHints(
   medianPrice: number,
   avgPrice: number,
@@ -52,15 +87,31 @@ export async function POST(req: NextRequest) {
   try {
     const supabase = await createClient()
 
-    // 7개 RPC 병렬 호출
-    const [summaryRes, floorRes, distRes, listingsRes, historyRes, priceGapRes, areaSegRes] = await Promise.all([
-      supabase.rpc('get_sg_rent_summary', { p_lng: lng, p_lat: lat, p_radius: radius }),
-      supabase.rpc('get_sg_rent_stats',   { p_lng: lng, p_lat: lat, p_radius: radius }),
-      supabase.rpc('get_sg_rent_distribution', { p_lng: lng, p_lat: lat, p_radius: radius }),
-      supabase.rpc('get_sg_rent_listings', { p_lng: lng, p_lat: lat, p_radius: radius }),
-      supabase.rpc('get_sg_rent_history_nearby', { p_lng: lng, p_lat: lat, p_radius: radius }),
-      supabase.rpc('get_price_gap_analysis', { p_lng: lng, p_lat: lat, p_radius: radius }),
-      supabase.rpc('get_area_segment_stats', { p_lng: lng, p_lat: lat, p_radius: radius }),
+    // 7개 RPC + 카카오 API 병렬 호출
+    const [
+      [summaryRes, floorRes, distRes, listingsRes, historyRes, priceGapRes, areaSegRes],
+      competitionData,
+      transitData,
+    ] = await Promise.all([
+      Promise.all([
+        supabase.rpc('get_sg_rent_summary', { p_lng: lng, p_lat: lat, p_radius: radius }),
+        supabase.rpc('get_sg_rent_stats',   { p_lng: lng, p_lat: lat, p_radius: radius }),
+        supabase.rpc('get_sg_rent_distribution', { p_lng: lng, p_lat: lat, p_radius: radius }),
+        supabase.rpc('get_sg_rent_listings', { p_lng: lng, p_lat: lat, p_radius: radius }),
+        supabase.rpc('get_sg_rent_history_nearby', { p_lng: lng, p_lat: lat, p_radius: radius }),
+        supabase.rpc('get_price_gap_analysis', { p_lng: lng, p_lat: lat, p_radius: radius }),
+        supabase.rpc('get_area_segment_stats', { p_lng: lng, p_lat: lat, p_radius: radius }),
+      ]),
+      Promise.all(
+        KAKAO_CATEGORIES.map(c =>
+          fetchKakaoCategory(c.code, lng, lat, radius).then(r => ({
+            category: c.name,
+            code: c.code,
+            count: r.count,
+          }))
+        )
+      ),
+      fetchNearestSubway(lng, lat),
     ])
 
     if (summaryRes.error) throw summaryRes.error
@@ -166,6 +217,8 @@ export async function POST(req: NextRequest) {
           avgPrice:    Number(r.avg_price),
           medianPrice: Number(r.median_price),
         })),
+        competition: competitionData,
+        transit: transitData,
       },
     })
   } catch (e) {

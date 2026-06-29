@@ -333,6 +333,56 @@ export default function AnalyzePage() {
               </div>
             )}
 
+            {/* 반경 내 업종 경쟁 현황 */}
+            {result.competition && result.competition.length > 0 && (
+              <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                <h2 className="text-sm font-semibold text-gray-700 mb-1">반경 {result.radius}m 내 업종 경쟁 현황</h2>
+                <p className="text-xs text-gray-400 mb-4">카카오 로컬 기준 업종별 매장 수</p>
+                <div className="space-y-3">
+                  {result.competition.map(item => {
+                    const maxCount = Math.max(...result.competition.map(c => c.count), 1)
+                    const barWidth = Math.round((item.count / maxCount) * 100)
+                    const dot = item.count >= 10 ? '🔴' : item.count >= 5 ? '🟡' : '🟢'
+                    return (
+                      <div key={item.code}>
+                        <div className="flex items-center justify-between mb-1">
+                          <span className="text-sm text-gray-700">{item.category}</span>
+                          <span className="text-sm font-medium text-gray-900">{item.count}개 {dot}</span>
+                        </div>
+                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-blue-400 rounded-full transition-all"
+                            style={{ width: `${barWidth}%` }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* 대중교통 접근성 */}
+            <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+              <h2 className="text-sm font-semibold text-gray-700 mb-1">대중교통 접근성</h2>
+              <p className="text-xs text-gray-400 mb-4">반경 2km 내 가까운 지하철역</p>
+              {(!result.transit || result.transit.length === 0) ? (
+                <p className="text-sm text-gray-400">반경 2km 내 지하철역 없음</p>
+              ) : (
+                <div className="space-y-2">
+                  {result.transit.map((station, idx) => {
+                    const walkMin = Math.round(station.distance / 67)
+                    return (
+                      <div key={idx} className="flex items-center justify-between bg-gray-50 rounded-lg px-4 py-3">
+                        <span className="text-sm text-gray-800">🚇 {station.name}</span>
+                        <span className="text-sm text-gray-500">도보 {walkMin}분 ({station.distance}m)</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+
             {/* 면책 문구 */}
             <p className="text-xs text-gray-400 text-center leading-relaxed">
               본 서비스는 공개된 호가 데이터를 기반으로 한 정보 제공 서비스입니다.<br />

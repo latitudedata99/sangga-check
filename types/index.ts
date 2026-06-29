@@ -62,6 +62,8 @@ export interface AnalyzeResult {
     avgPrice: number
     medianPrice: number
   }>
+  competition: Array<{ category: string; code: string; count: number }>
+  transit: Array<{ name: string; distance: number }>
 }
 
 export interface HistoryRow {
