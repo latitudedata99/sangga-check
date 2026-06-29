@@ -45,6 +45,7 @@ export interface AnalyzeResult {
     avgDeposit: number
   }
   byFloor: FloorStats[]
+  distribution: Record<FloorType, number[]>  // 바이올린 차트용 원시 분포 데이터
   listings: SgRentRow[] | null
   history: HistoryRow[] | null
   negotiationHints: string[] | null

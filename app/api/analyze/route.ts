@@ -13,49 +13,46 @@ export async function POST(req: NextRequest) {
   try {
     const supabase = await createClient()
 
-    // 전체 요약 (행 제한 없이 SQL 집계)
-    const { data: summaryRows, error: sumErr } = await supabase.rpc('get_sg_rent_summary', {
-      p_lng: lng,
-      p_lat: lat,
-      p_radius: radius,
-    })
-    if (sumErr) throw sumErr
+    // 3개 RPC 병렬 호출
+    const [summaryRes, floorRes, distRes] = await Promise.all([
+      supabase.rpc('get_sg_rent_summary', { p_lng: lng, p_lat: lat, p_radius: radius }),
+      supabase.rpc('get_sg_rent_stats',   { p_lng: lng, p_lat: lat, p_radius: radius }),
+      supabase.rpc('get_sg_rent_distribution', { p_lng: lng, p_lat: lat, p_radius: radius }),
+    ])
 
-    const s = summaryRows?.[0]
-    const totalCount = Number(s?.total_count ?? 0)
+    if (summaryRes.error) throw summaryRes.error
+    if (floorRes.error)   throw floorRes.error
+    if (distRes.error)    throw distRes.error
+
+    const s = summaryRes.data?.[0]
+    const totalCount  = Number(s?.total_count  ?? 0)
     const medianPrice = Number(s?.median_price ?? 0)
-    const avgPrice = Number(s?.avg_price ?? 0)
+    const avgPrice    = Number(s?.avg_price    ?? 0)
 
-    // 층별 IQR 통계 (SQL에서 이상치 제거 포함)
-    const { data: floorRows, error: floorErr } = await supabase.rpc('get_sg_rent_stats', {
-      p_lng: lng,
-      p_lat: lat,
-      p_radius: radius,
-    })
-    if (floorErr) throw floorErr
-
-    const byFloor = (floorRows ?? []).map((r: Record<string, unknown>) => ({
-      floorType: r.floor_type as FloorType,
-      count: Number(r.cnt),
-      avgPrice: Number(r.avg_price),
-      medianPrice: Number(r.median_price),
-      minPrice: Number(r.min_price),
-      maxPrice: Number(r.max_price),
+    const byFloor = (floorRes.data ?? []).map((r: Record<string, unknown>) => ({
+      floorType:      r.floor_type as FloorType,
+      count:          Number(r.cnt),
+      avgPrice:       Number(r.avg_price),
+      medianPrice:    Number(r.median_price),
+      minPrice:       Number(r.min_price),
+      maxPrice:       Number(r.max_price),
       avgMonthlyRent: Number(r.avg_rent),
-      avgDeposit: Number(r.avg_deposit),
+      avgDeposit:     Number(r.avg_deposit),
     }))
 
-    const verdict = computeVerdict(null, medianPrice)
+    // 바이올린 차트용 분포 데이터 (층별 그룹핑)
+    const distribution: Record<string, number[]> = { '1층': [], '지상층': [], '지하층': [] }
+    for (const row of (distRes.data ?? []) as Array<{ floor_type: string; price: number }>) {
+      if (distribution[row.floor_type]) distribution[row.floor_type].push(Number(row.price))
+    }
+
+    const verdict      = computeVerdict(null, medianPrice)
     const verdictLabel = verdict ? VERDICT_LABEL[verdict] : '정보 없음'
 
-    // 리포트 저장
     const { data: report } = await supabase
       .from('reports')
       .insert({
-        address,
-        lat,
-        lng,
-        radius,
+        address, lat, lng, radius,
         result_json: { summary: { totalCount, avgPrice, medianPrice }, byFloor },
       })
       .select('id')
@@ -64,24 +61,20 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({
       success: true,
       data: {
-        reportId: report?.id ?? null,
-        address,
-        lat,
-        lng,
-        radius,
-        analyzedAt: new Date().toISOString(),
+        reportId:    report?.id ?? null,
+        address, lat, lng, radius,
+        analyzedAt:  new Date().toISOString(),
         summary: {
-          totalCount,
-          verdict,
-          verdictLabel,
-          avgPricePerPyeong: avgPrice,
+          totalCount, verdict, verdictLabel,
+          avgPricePerPyeong:    avgPrice,
           medianPricePerPyeong: medianPrice,
-          avgMonthlyRent: Number(s?.avg_rent ?? 0),
-          avgDeposit: Number(s?.avg_deposit ?? 0),
+          avgMonthlyRent: Number(s?.avg_rent    ?? 0),
+          avgDeposit:     Number(s?.avg_deposit ?? 0),
         },
         byFloor,
-        listings: null,
-        history: null,
+        distribution,
+        listings:         null,
+        history:          null,
         negotiationHints: null,
       },
     })

@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { AnalyzeResult } from '@/types'
+import ViolinChart from '@/components/charts/ViolinChart'
 
 export default function AnalyzePage() {
   const [address, setAddress] = useState('')
@@ -114,26 +115,11 @@ export default function AnalyzePage() {
               </div>
             </div>
 
-            {/* 층별 요약 */}
+            {/* 층별 분포 (바이올린 차트) */}
             <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
-              <h2 className="text-sm font-semibold text-gray-700 mb-4">층별 평단가 비교</h2>
-              <div className="space-y-3">
-                {result.byFloor.map(floor => (
-                  <div key={floor.floorType} className="flex items-center gap-4">
-                    <span className="text-xs font-medium text-gray-500 w-12">{floor.floorType}</span>
-                    <div className="flex-1 bg-gray-100 rounded-full h-2">
-                      <div
-                        className="bg-blue-500 h-2 rounded-full"
-                        style={{ width: `${Math.min((floor.avgPrice / 30) * 100, 100)}%` }}
-                      />
-                    </div>
-                    <span className="text-sm font-semibold text-gray-800 w-20 text-right">
-                      {floor.avgPrice}만원/평
-                    </span>
-                    <span className="text-xs text-gray-400 w-12 text-right">{floor.count}개</span>
-                  </div>
-                ))}
-              </div>
+              <h2 className="text-sm font-semibold text-gray-700 mb-1">층별 전용평단가 분포</h2>
+              <p className="text-xs text-gray-400 mb-4">IQR 기반 이상치 제거 후 커널 밀도 추정</p>
+              <ViolinChart distribution={result.distribution} />
             </div>
 
             {/* 상세 리포트 잠금 */}
